@@ -81,5 +81,33 @@ npm run dev
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
 
+## 桥接分派（多值桥接 → 事实装配待办）
+
+多值桥接条目按事实批次跨模块派工，入口在前端「桥接分派」页签
+（`/bridge_dispatch`，`frontend/src/views/BridgeDispatchView.vue`），
+领域引擎在 `backend/app/pipeline/bridge_dispatcher.py`，服务编排在
+`backend/app/services/bridge_link.py`，路由在
+`backend/app/routers/bridge_dispatch.py`。
+
+- 同一桥接编号可分属不同事实批次（F90 门店组、F91 渠道组两个页签里的 BRG-07
+  是两条独立条目），各自派工到各自装配批次，互不串单。
+- 审核员多选同一批次多条条目批量派工；逐条返回每个装配员的处置资格与拒绝依据
+  （资格按维度组判定，归一失败/已作废条目全员被拒，其他条目照常派工）。
+- 在途未写入时改派：旧待办置「已改派」、条目版本号前进；并发提交处分时凭版本号
+  乐观仲裁，同一条目只确认一项处分，另一项带回拒绝依据。
+- 回包丢失凭原 `request_id` 调 `/resume` 幂等接续，不重复生成待办；回执台账
+  可分辨每条桥接最终由谁完成。
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/bridge_link/dispatch/overview` | 派工台：两批归属、资格、在途待办、最近拒绝依据 |
+| GET | `/api/bridge_link/dispatch/eligibility/{批次}/{桥接编号}` | 逐人处置资格与拒绝依据 |
+| GET | `/api/bridge_link/dispatch/entries/{批次}/{桥接编号}` | 单条目视图（含同编号跨批归属） |
+| GET | `/api/bridge_link/assembly-todos` | 跨模块生成的事实装配待办 |
+| GET | `/api/bridge_link/receipts` | 回执台账 |
+| POST | `/api/bridge_link/dispatch` | 批量派工/改派 |
+| POST | `/api/bridge_link/dispositions` | 装配员处分批量提交（版本仲裁） |
+| POST | `/api/bridge_link/resume` | 凭请求编号幂等接续重试 |
+
 领域：数据工程
 子方向：数仓与数据湖
